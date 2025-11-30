@@ -1,0 +1,131 @@
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#
+#     https://docs.fastlane.tools/actions
+#
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
+
+default_platform(:android)
+
+platform :android do
+  desc "Bump version code and build AAB"
+  lane :bump_version do
+    # Read and increment version code in android/app/build.gradle
+    gradle_file = File.read("../android/app/build.gradle")
+    version_code_line = gradle_file.lines.find { |line| line.strip.start_with?("versionCode") }
+    current_version_code = version_code_line[/\d+/].to_i
+    new_version_code = current_version_code + 1
+    
+    # Replace versionCode in build.gradle
+    new_gradle_file = gradle_file.gsub(/versionCode \d+/, "versionCode #{new_version_code}")
+    File.write("../android/app/build.gradle", new_gradle_file)
+    
+    # Update pubspec.yaml version
+    pubspec = File.read("../pubspec.yaml")
+    new_pubspec = pubspec.gsub(/version: .*/, "version: 1.0.1+#{new_version_code}")
+    File.write("../pubspec.yaml", new_pubspec)
+    
+    puts "🔄 Bumping version from #{current_version_code} to #{new_version_code}"
+    
+    # Build AAB using Flutter
+    sh("cd .. && flutter build appbundle")
+    
+    puts "✅ Version bumped to #{new_version_code}"
+    puts "📦 AAB built successfully"
+  end
+
+  desc "Deploy to Google Play Internal Testing"
+  lane :deploy_internal do
+    bump_version
+    
+    supply(
+      json_key: ENV["PLAY_STORE_CONFIG_JSON"] || "~/Downloads/fresh-oath-337920-ddb4351c237a.json",
+      package_name: "com.mooves.app",
+      aab: "/home/klas/Kod/mooves/dating_app/build/app/outputs/bundle/release/app-release.aab",
+      track: "internal",
+      release_status: "draft"
+    )
+    
+    puts "🚀 Successfully deployed to Internal Testing!"
+  end
+
+  desc "Deploy to Google Play Production"
+  lane :deploy_production do
+    bump_version
+    
+    supply(
+      json_key: ENV["PLAY_STORE_CONFIG_JSON"] || "~/Downloads/fresh-oath-337920-ddb4351c237a.json",
+      package_name: "com.mooves.app",
+      aab: "/home/klas/Kod/mooves/dating_app/build/app/outputs/bundle/release/app-release.aab",
+      track: "production",
+      release_status: "draft"
+    )
+    
+    puts "🚀 Successfully deployed to Production!"
+  end
+
+  desc "Add tester to internal testing track"
+  lane :add_tester do |options|
+    email = options[:email]
+    track = options[:track] || "internal"
+    
+    if email.nil?
+      puts "❌ Error: Email is required. Usage: fastlane add_tester email:user@example.com"
+      next
+    end
+    
+    puts "👤 Adding #{email} to #{track} testing track..."
+    
+    # Use the google_play_track_release_names action to manage testers
+    # This is a workaround since Fastlane doesn't have a direct add_tester action
+    # We'll use the supply action with a dummy AAB to trigger the API call
+    begin
+      # First, let's try to get current testers
+      google_play_track_release_names(
+        package_name: "com.mooves.app",
+        track: track,
+        json_key: ENV["PLAY_STORE_CONFIG_JSON"] || "~/Downloads/fresh-oath-337920-ddb4351c237a.json"
+      )
+      
+      puts "✅ Successfully connected to Google Play Console"
+      puts "📧 Please manually add #{email} to the #{track} testing track in Google Play Console"
+      puts "🔗 Go to: https://play.google.com/console/u/0/developers/337920/app/49736000000000000000/testing/internal-testing"
+      
+    rescue => ex
+      puts "❌ Error: #{ex.message}"
+      puts "📧 Please manually add #{email} to the #{track} testing track in Google Play Console"
+    end
+  end
+
+  desc "Upload metadata and images to Google Play Store"
+  lane :upload_metadata do
+    puts "📱 Uploading metadata and images to Google Play Store..."
+    
+    # First, let's check if we can connect to the Play Store
+    begin
+      google_play_track_release_names(
+        package_name: "com.mooves.app",
+        track: "internal",
+        json_key: ENV["PLAY_STORE_CONFIG_JSON"] || "~/Downloads/fresh-oath-337920-ddb4351c237a.json"
+      )
+      
+      puts "✅ Successfully connected to Google Play Console"
+      puts "📧 Please manually upload the images and metadata through the Google Play Console"
+      puts "🔗 Go to: https://play.google.com/console/u/0/developers/337920/app/49736000000000000000/store-presence"
+      puts "📁 Images are located in: metadata/en-US/images/"
+      puts "📝 Metadata files are located in: metadata/en-US/"
+      
+    rescue => ex
+      puts "❌ Error: #{ex.message}"
+      puts "📧 Please manually upload the images and metadata through the Google Play Console"
+    end
+  end
+end 

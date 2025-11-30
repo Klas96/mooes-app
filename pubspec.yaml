@@ -1,0 +1,42 @@
+name: mooves
+description: Mooves helps you log training sessions and earn QR rewards when goals are completed.
+
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 134.10.14+231
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  http: ^1.1.0
+  shared_preferences: ^2.2.2
+  image_picker: ^1.0.7
+  flutter_local_notifications: ^19.3.0
+  flutter_launcher_icons: ^0.14.4
+  google_sign_in: ^6.2.1
+  qr_flutter: ^4.1.0
+  intl: ^0.20.2
+  health: ^13.2.1
+  url_launcher: ^6.2.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  mockito: ^5.4.4
+  build_runner: ^2.5.4
+  analyzer: ^7.5.2
+
+flutter:
+  uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/mooves-icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/mooves-icon.png"
