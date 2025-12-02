@@ -83,5 +83,60 @@ class UserGoalProgressService {
       return null;
     }
   }
+
+  /// Manually mark a goal as complete
+  static Future<Map<String, dynamic>> markGoalComplete(String goalId) async {
+    try {
+      debugPrint('🔧 Marking goal as complete: $goalId');
+      final response = await AuthService.authenticatedRequest(
+        'POST',
+        '/user-goal-progress/goal/$goalId/mark-complete',
+      );
+
+      debugPrint('📡 Response status: ${response.statusCode}');
+      debugPrint('📡 Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          debugPrint('✅ Goal marked as complete successfully');
+          return {
+            'success': true,
+            'progress': data['progress'],
+            'message': data['message'] ?? 'Goal marked as complete!',
+          };
+        } else {
+          debugPrint('❌ Backend returned success=false: ${data['message']}');
+          return {
+            'success': false,
+            'message': data['message'] ?? 'Failed to mark goal as complete',
+          };
+        }
+      }
+
+      // Handle non-200 status codes
+      try {
+        final errorData = json.decode(response.body);
+        debugPrint('❌ Error response: ${errorData['message']}');
+        return {
+          'success': false,
+          'message': errorData['message'] ?? errorData['error'] ?? 'Failed to mark goal as complete',
+        };
+      } catch (e) {
+        debugPrint('❌ Could not parse error response: $e');
+        return {
+          'success': false,
+          'message': 'Server error (${response.statusCode}). Please try again.',
+        };
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ Exception marking goal as complete: $e');
+      debugPrint('Stack trace: $stackTrace');
+      return {
+        'success': false,
+        'message': 'Error marking goal as complete: $e',
+      };
+    }
+  }
 }
 

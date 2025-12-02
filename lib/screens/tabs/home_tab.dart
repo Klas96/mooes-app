@@ -412,24 +412,26 @@ class _HomeTabState extends State<HomeTab> {
         final goalReached = distanceGoalReached && durationGoalReached;
 
         // Update entries in this period
+        // Note: We still track goalReached for display purposes, but don't automatically show QR
+        // Users will manually mark challenges as complete
         for (final entry in periodEntries) {
           if (entry.goalReached != goalReached) {
             final updatedEntry = entry.copyWith(goalReached: goalReached);
             _entries = _entries.map((e) => e.id == entry.id ? updatedEntry : e).toList();
             updated = true;
 
-            // If goal just reached, show QR screen
-            if (goalReached && mounted) {
-              Future.delayed(const Duration(milliseconds: 500), () {
-                if (mounted) {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => RewardQrScreen(entry: updatedEntry),
-                    ),
-                  );
-                }
-              });
-            }
+            // Disabled automatic QR screen - users will manually mark challenges as complete
+            // if (goalReached && mounted) {
+            //   Future.delayed(const Duration(milliseconds: 500), () {
+            //     if (mounted) {
+            //       Navigator.of(context).push(
+            //         MaterialPageRoute(
+            //           builder: (_) => RewardQrScreen(entry: updatedEntry),
+            //         ),
+            //       );
+            //     }
+            //   });
+            // }
           }
         }
       }

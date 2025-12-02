@@ -19,6 +19,7 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
   Map<String, dynamic>? _progress;
   bool _isLoading = true;
   bool _isJoining = false;
+  bool _isMarkingComplete = false;
   String? _error;
 
   @override
@@ -89,6 +90,66 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
     } finally {
       setState(() {
         _isJoining = false;
+      });
+    }
+  }
+
+  Future<void> _markGoalComplete() async {
+    setState(() {
+      _isMarkingComplete = true;
+      _error = null;
+    });
+
+    try {
+      final result = await UserGoalProgressService.markGoalComplete(widget.goalId);
+      if (result['success'] == true) {
+        await _loadProgress();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                result['message'] ?? 'Challenge marked as complete!',
+                style: const TextStyle(color: AppColors.textOnPink),
+              ),
+              backgroundColor: AppColors.pinkCard,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _error = result['message'] ?? 'Failed to mark challenge as complete';
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                result['message'] ?? 'Failed to mark challenge as complete',
+                style: const TextStyle(color: Colors.white),
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Error marking challenge as complete: $e';
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error: $e',
+              style: const TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isMarkingComplete = false;
       });
     }
   }
@@ -371,6 +432,41 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
                                         padding: const EdgeInsets.symmetric(vertical: 16),
                                       ),
                                     ),
+                                  ),
+                                ] else ...[
+                                  // Manual completion button
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      onPressed: _isMarkingComplete ? null : _markGoalComplete,
+                                      icon: _isMarkingComplete
+                                          ? const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : const Icon(Icons.check_circle_outline),
+                                      label: Text(_isMarkingComplete ? 'Marking Complete...' : 'Mark Challenge as Complete'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.accentCoral,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Tap this button when you have completed the challenge',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    textAlign: TextAlign.center,
                                   ),
                                 ],
                               ],

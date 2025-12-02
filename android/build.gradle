@@ -19,9 +19,9 @@ tasks.register("clean", Delete) {
 
 buildscript {
     ext {
-        compileSdkVersion = 35  // Android 15 (API 35) - matches device
+        compileSdkVersion = 36  // Android 16 (API 36) - required by health plugin
         minSdkVersion = 26
-        targetSdkVersion = 35   // Target Android 15 for better compatibility
+        targetSdkVersion = 36   // Target Android 16 (API 36) for Health Connect compatibility
     }
     repositories {
         google()

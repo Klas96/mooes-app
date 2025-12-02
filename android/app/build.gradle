@@ -16,8 +16,9 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.mooves.app"
     compileSdkVersion rootProject.ext.compileSdkVersion
-    buildToolsVersion "35.0.0"  // Match Android 15 (API 35)
-    ndkVersion = "25.2.9519653" // Use working NDK version (27.0.12077973 is incomplete)
+    compileSdk = 36  // Required by health plugin (Android SDK 36)
+    buildToolsVersion "36.0.0"  // Match Android 16 (API 36)
+    ndkVersion = "26.1.10909125" // Use NDK version with toolchain file
 
     compileOptions {
         coreLibraryDesugaringEnabled true
@@ -58,8 +59,8 @@ android {
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode = 231
-        versionName = "134.10.14"
+        versionCode = 233
+        versionName = "134.10.16"
     }
 
     signingConfigs {

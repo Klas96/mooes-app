@@ -4,7 +4,8 @@
 import 'package:mooves/services/health_connect_service_stub.dart' as health_stub;
 
 /// Create HealthFactory - stub implementation
+/// Returns a Health instance (stub)
 dynamic createHealthFactory() {
-  return health_stub.HealthFactory();
+  return health_stub.Health();
 }
 

@@ -16,16 +16,32 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Google Play Billing permission -->
     <uses-permission android:name="com.android.vending.BILLING" />
-    <!-- Health Connect permissions are requested at runtime -->
-    <!-- Health Connect data types (required for Android 14+) -->
-    <!-- Note: These permissions must be declared for Health Connect to discover the app -->
+    <!-- Health Connect permissions (required for Android 14+) -->
+    <!-- These permissions must be declared for Health Connect to discover the app -->
+    <!-- See: https://developer.android.com/health-and-fitness/health-connect/get-started -->
+    
+    <!-- Steps data -->
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
+    <uses-permission android:name="android.permission.health.WRITE_STEPS"/>
+    
+    <!-- Distance data -->
     <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
+    <uses-permission android:name="android.permission.health.WRITE_DISTANCE"/>
+    
+    <!-- Active calories burned -->
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
+    <uses-permission android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED"/>
+    
+    <!-- Exercise/Workout data -->
     <uses-permission android:name="android.permission.health.READ_EXERCISE"/>
-    <!-- Additional permissions that might be needed -->
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE"/>
+    
+    <!-- Heart rate (optional, for future use) -->
     <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
+    
+    <!-- Workout sessions -->
     <uses-permission android:name="android.permission.health.READ_WORKOUT"/>
+    <uses-permission android:name="android.permission.health.WRITE_WORKOUT"/>
     <!-- Camera feature declaration -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -117,7 +133,21 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-        <!-- Health Connect query -->
+        <!-- Health Connect query - Required for Android 14+ -->
+        <!-- This allows the app to query and interact with Health Connect -->
+        <!-- On Android 14+, Health Connect is system-integrated -->
         <package android:name="com.google.android.apps.healthdata" />
+        
+        <!-- Health Connect intent actions -->
+        <intent>
+            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+        </intent>
+        <intent>
+            <action android:name="android.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
+        </intent>
+        <!-- Health Connect permission request intent (Android 14+) -->
+        <intent>
+            <action android:name="android.health.connect.action.REQUEST_PERMISSIONS" />
+        </intent>
     </queries>
 </manifest>

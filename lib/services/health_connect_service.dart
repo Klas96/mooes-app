@@ -157,31 +157,29 @@ class HealthConnectService {
       // On other platforms, it will be stub but we check Platform.isAndroid/iOS first
 
       // Check if Health Connect is available before requesting permissions
+      // Note: On Android 14+ (especially Android 16), Health Connect is system-integrated
+      // so isHealthConnectAvailable() might not work correctly
       if (Platform.isAndroid) {
         try {
           final isAvailable = await _health!.isHealthConnectAvailable();
-          debugPrint('🔍 Health Connect available: $isAvailable');
+          debugPrint('🔍 Health Connect available check: $isAvailable');
           
           if (!isAvailable) {
-            debugPrint('❌ Health Connect is not installed');
-            // Try to prompt user to install it
-            try {
-              await _health!.installHealthConnect();
-              debugPrint('✅ Opened Play Store to install Health Connect');
-            } catch (e) {
-              debugPrint('⚠️ Could not open Play Store: $e');
-            }
-            return {
-              'success': false,
-              'message': 'Health Connect is not installed. Please install it from the Play Store.',
-              'needsInstall': true,
-            };
+            debugPrint('⚠️ isHealthConnectAvailable() returned false');
+            debugPrint('   On Android 14+, Health Connect is system-integrated');
+            debugPrint('   This check might be unreliable - continuing anyway');
+            // On Android 14+, Health Connect is integrated into the system
+            // so we should continue and try to request permissions anyway
+            // The permission request will fail gracefully if Health Connect isn't available
+          } else {
+            debugPrint('✅ Health Connect is available');
           }
-          
-          debugPrint('✅ Health Connect is installed and available');
         } catch (e) {
           debugPrint('⚠️ Error checking Health Connect availability: $e');
-          // Continue anyway - might work on some devices
+          debugPrint('   On Android 14+, Health Connect is system-integrated');
+          debugPrint('   Continuing to try permission request anyway');
+          // Continue anyway - on Android 14+, Health Connect is system-integrated
+          // so the availability check might fail, but permissions might still work
         }
       }
 
@@ -271,15 +269,16 @@ class HealthConnectService {
           // 1. App is side-loaded (APK) - Health Connect has restrictions for non-Play Store apps
           // 2. Permissions were previously denied
           // 3. Health Connect needs to be opened manually
+          // 4. On Android 14+ (especially Android 16), Health Connect is system-integrated
           debugPrint('⚠️ Health Connect did not open automatically');
-          debugPrint('   This might be because the app is installed via APK (not Play Store)');
-          debugPrint('   Health Connect has restrictions for side-loaded apps');
+          debugPrint('   On Android 14+, Health Connect is system-integrated');
+          debugPrint('   You may need to grant permissions manually');
           
           return {
             'success': false,
-            'message': 'Health Connect did not open automatically. This is common when the app is installed via APK (not Play Store).\n\nHealth Connect requires apps to be installed from the Play Store for automatic permission requests.\n\nTo grant permissions manually:\n1. Open Health Connect app\n2. Go to Settings > Apps and services\n3. Find "Mooves" and tap it\n4. Grant permissions for:\n   - Distance\n   - Active Energy\n   - Workouts\n5. Return to Mooves and try connecting again\n\nNote: For full Health Connect functionality, install the app from the Play Store.',
+            'message': 'Health Connect permission screen did not open automatically.\n\nOn Android 14+, Health Connect is integrated into the system. To grant permissions manually:\n\n1. Open Settings on your device\n2. Go to Security & Privacy > Privacy > Health Connect\n   (Or search for "Health Connect" in Settings)\n3. Tap "Apps and services"\n4. Find "Mooves" and tap it\n5. Grant permissions for:\n   - Distance\n   - Active Energy\n   - Workouts\n6. Return to Mooves and try connecting again\n\nIf you installed the app from the Play Store alpha test, permissions should work automatically. If not, please grant them manually as described above.',
             'needsSettings': true,
-            'sideLoaded': true,
+            'sideLoaded': false,
           };
         }
       } catch (e) {

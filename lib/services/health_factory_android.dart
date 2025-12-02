@@ -6,18 +6,18 @@ import 'package:flutter/foundation.dart' show debugPrint;
 
 /// Create HealthFactory - real implementation for Android/iOS
 /// This will only compile on Android/iOS builds, not on Linux
+/// Note: The health package uses Health() not HealthFactory(), so we return a Health instance
 dynamic createHealthFactory() {
   try {
-    debugPrint('🔧 health_factory_android: Creating HealthFactory...');
+    debugPrint('🔧 health_factory_android: Creating Health instance...');
     // On Android/iOS, this will work. On Linux, this file won't be used.
-    // ignore: undefined_method
-    // ignore: undefined_class
-    final factory = health_package.HealthFactory();
-    debugPrint('✅ health_factory_android: HealthFactory created successfully');
-    debugPrint('   Factory type: ${factory.runtimeType}');
-    return factory;
+    // The health package uses Health() not HealthFactory()
+    final health = health_package.Health();
+    debugPrint('✅ health_factory_android: Health instance created successfully');
+    debugPrint('   Health type: ${health.runtimeType}');
+    return health;
   } catch (e, stackTrace) {
-    debugPrint('❌ health_factory_android: Failed to create HealthFactory: $e');
+    debugPrint('❌ health_factory_android: Failed to create Health instance: $e');
     debugPrint('   Error type: ${e.runtimeType}');
     debugPrint('Stack trace: $stackTrace');
     // If this fails, return null (shouldn't happen on Android/iOS)

@@ -42,3 +42,9 @@ class HealthDataPoint {
     this.value,
   });
 }
+
+class HealthFactory {
+  HealthFactory();
+  // Returns a Health instance (stub implementation)
+  Health call() => Health();
+}

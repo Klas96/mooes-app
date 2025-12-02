@@ -3,7 +3,7 @@ description: Mooves helps you log training sessions and earn QR rewards when goa
 
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 134.10.14+231
+version: 134.10.16+233
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
