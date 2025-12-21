@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:mooves/constants/colors.dart';
+import 'package:mooves/constants/api_config.dart';
 import 'package:mooves/services/coupon_service.dart';
 import 'package:mooves/screens/reward_qr_screen.dart';
+import 'package:mooves/screens/store_profile_screen.dart';
 import 'package:mooves/models/training_entry.dart';
+import 'package:mooves/widgets/app_bar_logo.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -42,6 +45,24 @@ class _CouponsScreenState extends State<CouponsScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  String _getStoreImageUrl(Map<String, dynamic>? store) {
+    if (store == null) return '';
+    final imagePath = store['profilePicture'] ?? store['logo'];
+    if (imagePath == null || imagePath.isEmpty) return '';
+    
+    // If it's already a full URL, return as is
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    
+    // If it's a relative path, construct full URL
+    if (imagePath.startsWith('/uploads/')) {
+      return '${ApiConfig.baseUrl}$imagePath';
+    }
+    
+    return imagePath;
   }
 
   Future<void> _useCoupon(String couponId) async {
@@ -197,13 +218,7 @@ class _CouponsScreenState extends State<CouponsScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.pinkCard,
         elevation: 0,
-        title: const Text(
-          'My Coupons',
-          style: TextStyle(
-            color: AppColors.textOnPink,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const AppBarLogo(title: 'My Coupons'),
         iconTheme: const IconThemeData(color: AppColors.textOnPink),
       ),
       body: RefreshIndicator(
@@ -291,33 +306,73 @@ class _CouponsScreenState extends State<CouponsScreen> {
                                     if (coupon['store'] != null || coupon['goal'] != null) ...[
                                       Row(
                                         children: [
-                                          if (coupon['store'] != null &&
-                                              coupon['store']['logo'] != null)
-                                            Container(
-                                              width: 32,
-                                              height: 32,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                image: DecorationImage(
-                                                  image: NetworkImage(coupon['store']['logo']),
-                                                  fit: BoxFit.cover,
+                                          if (coupon['store'] != null && _getStoreImageUrl(coupon['store']).isNotEmpty)
+                                            InkWell(
+                                              onTap: () {
+                                                final storeId = coupon['store']['id']?.toString();
+                                                if (storeId != null) {
+                                                  Navigator.of(context).push(
+                                                    MaterialPageRoute(
+                                                      builder: (_) => StoreProfileScreen(storeId: storeId),
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                              borderRadius: BorderRadius.circular(16),
+                                              child: Container(
+                                                width: 32,
+                                                height: 32,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  image: DecorationImage(
+                                                    image: NetworkImage(_getStoreImageUrl(coupon['store'])),
+                                                    fit: BoxFit.cover,
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          if (coupon['store'] != null &&
-                                              coupon['store']['logo'] != null)
+                                          if (coupon['store'] != null && _getStoreImageUrl(coupon['store']).isNotEmpty)
                                             const SizedBox(width: 8),
                                           Expanded(
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
                                                 if (coupon['store'] != null)
-                                                  Text(
-                                                    coupon['store']['storeName'] ?? 'Store',
-                                                    style: const TextStyle(
-                                                      fontSize: 14,
-                                                      fontWeight: FontWeight.w600,
-                                                      color: AppColors.textSecondary,
+                                                  InkWell(
+                                                    onTap: () {
+                                                      final storeId = coupon['store']['id']?.toString();
+                                                      if (storeId != null) {
+                                                        Navigator.of(context).push(
+                                                          MaterialPageRoute(
+                                                            builder: (_) => StoreProfileScreen(storeId: storeId),
+                                                          ),
+                                                        );
+                                                      }
+                                                    },
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    child: Padding(
+                                                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Flexible(
+                                                            child: Text(
+                                                              coupon['store']['storeName'] ?? 'Store',
+                                                              style: const TextStyle(
+                                                                fontSize: 14,
+                                                                fontWeight: FontWeight.w600,
+                                                                color: AppColors.textSecondary,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          const SizedBox(width: 4),
+                                                          const Icon(
+                                                            Icons.open_in_new,
+                                                            size: 14,
+                                                            color: AppColors.textSecondary,
+                                                          ),
+                                                        ],
+                                                      ),
                                                     ),
                                                   ),
                                                 if (coupon['goal'] != null) ...[
