@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mooves/constants/colors.dart';
 import 'package:mooves/services/auth_service.dart';
 import 'package:mooves/services/profile_service.dart';
+import 'package:mooves/widgets/app_bar_logo.dart';
 import 'package:mooves/services/health_connect_service.dart';
 import 'package:mooves/services/google_fit_service.dart';
 
@@ -601,13 +602,7 @@ class _ProfileTabState extends State<ProfileTab> {
       appBar: AppBar(
         backgroundColor: AppColors.pinkCard, // Pink app bar
         elevation: 0,
-        title: const Text(
-          'Profile',
-          style: TextStyle(
-            color: AppColors.textOnPink,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const AppBarLogo(title: 'Profile'),
         iconTheme: const IconThemeData(color: AppColors.textOnPink),
       ),
       body: RefreshIndicator(  

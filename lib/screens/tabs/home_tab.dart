@@ -11,6 +11,7 @@ import 'package:mooves/services/health_connect_service.dart';
 import 'package:mooves/services/google_fit_service.dart';
 import 'package:mooves/services/profile_service.dart';
 import 'package:mooves/services/user_goal_progress_service.dart';
+import 'package:mooves/widgets/app_bar_logo.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeTab extends StatefulWidget {
@@ -767,13 +768,7 @@ class _HomeTabState extends State<HomeTab> {
       appBar: AppBar(
         backgroundColor: AppColors.pinkCard,
         elevation: 0,
-        title: const Text(
-          'Training log',
-          style: TextStyle(
-            color: AppColors.textOnPink,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const AppBarLogo(title: 'Training log'),
         iconTheme: const IconThemeData(color: AppColors.textOnPink),
       ),
       floatingActionButton: FloatingActionButton.extended(

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mooves/constants/colors.dart';
+import 'package:mooves/constants/api_config.dart';
 import 'package:mooves/services/store_goal_service.dart';
 import 'package:mooves/services/user_goal_progress_service.dart';
 import 'package:mooves/screens/store_goal_detail_screen.dart';
+import 'package:mooves/screens/store_profile_screen.dart';
+import 'package:mooves/widgets/app_bar_logo.dart';
 import 'package:intl/intl.dart';
 
 class StoreGoalsScreen extends StatefulWidget {
@@ -64,6 +68,24 @@ class _StoreGoalsScreenState extends State<StoreGoalsScreen> {
     return '$minutes min';
   }
 
+  String _getStoreImageUrl(Map<String, dynamic>? store) {
+    if (store == null) return '';
+    final imagePath = store['profilePicture'] ?? store['logo'];
+    if (imagePath == null || imagePath.isEmpty) return '';
+    
+    // If it's already a full URL, return as is
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    
+    // If it's a relative path, construct full URL
+    if (imagePath.startsWith('/uploads/')) {
+      return '${ApiConfig.baseUrl}$imagePath';
+    }
+    
+    return imagePath;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,13 +93,7 @@ class _StoreGoalsScreenState extends State<StoreGoalsScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.pinkCard,
         elevation: 0,
-        title: const Text(
-          'Store Challenges',
-          style: TextStyle(
-            color: AppColors.textOnPink,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const AppBarLogo(title: 'Store Challenges'),
         iconTheme: const IconThemeData(color: AppColors.textOnPink),
       ),
       body: RefreshIndicator(
@@ -143,13 +159,22 @@ class _StoreGoalsScreenState extends State<StoreGoalsScreen> {
                           final goal = _goals[index];
                           final store = goal['store'] as Map<String, dynamic>?;
                           final isFull = goal['isFull'] == true;
+                          final isCompleted = goal['isCompleted'] == true;
 
                           return Card(
                             margin: const EdgeInsets.only(bottom: 16),
-                            color: AppColors.pinkCard,
-                            elevation: 2,
+                            color: isCompleted 
+                                ? AppColors.accentCoral.withOpacity(0.1)
+                                : AppColors.pinkCard,
+                            elevation: isCompleted ? 4 : 2,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
+                              side: isCompleted
+                                  ? const BorderSide(
+                                      color: AppColors.accentCoral,
+                                      width: 2,
+                                    )
+                                  : BorderSide.none,
                             ),
                             child: InkWell(
                               onTap: () async {
@@ -170,41 +195,109 @@ class _StoreGoalsScreenState extends State<StoreGoalsScreen> {
                                   children: [
                                     // Store name
                                     if (store != null) ...[
-                                      Row(
-                                        children: [
-                                          if (store['logo'] != null)
-                                            Container(
-                                              width: 32,
-                                              height: 32,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                image: DecorationImage(
-                                                  image: NetworkImage(store['logo']),
-                                                  fit: BoxFit.cover,
+                                      InkWell(
+                                        onTap: () {
+                                          debugPrint('Store object: $store');
+                                          debugPrint('Store keys: ${store.keys.toList()}');
+                                          final storeId = store['id'] ?? store['Id'] ?? store['ID'];
+                                          final storeIdString = storeId?.toString();
+                                          debugPrint('Store ID: $storeIdString');
+                                          if (storeIdString != null && storeIdString.isNotEmpty) {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) => StoreProfileScreen(storeId: storeIdString),
+                                              ),
+                                            );
+                                          } else {
+                                            debugPrint('Store ID not found in store object');
+                                          }
+                                        },
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (_getStoreImageUrl(store).isNotEmpty)
+                                                Container(
+                                                  width: 32,
+                                                  height: 32,
+                                                  decoration: BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    image: DecorationImage(
+                                                      image: NetworkImage(_getStoreImageUrl(store)),
+                                                      fit: BoxFit.cover,
+                                                    ),
+                                                  ),
+                                                ),
+                                              if (_getStoreImageUrl(store).isNotEmpty) const SizedBox(width: 8),
+                                              Flexible(
+                                                child: Text(
+                                                  store['storeName'] ?? 'Store',
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: AppColors.textSecondary,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                          if (store['logo'] != null) const SizedBox(width: 8),
-                                          Text(
-                                            store['storeName'] ?? 'Store',
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: AppColors.textSecondary,
-                                            ),
+                                              const SizedBox(width: 4),
+                                              const Icon(
+                                                Icons.open_in_new,
+                                                size: 16,
+                                                color: AppColors.textSecondary,
+                                              ),
+                                            ],
                                           ),
-                                        ],
+                                        ),
                                       ),
                                       const SizedBox(height: 12),
                                     ],
-                                    // Goal title
-                                    Text(
-                                      goal['title'] ?? 'Challenge',
-                                      style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.textOnPink,
-                                      ),
+                                    // Goal title with completion status
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            goal['title'] ?? 'Challenge',
+                                            style: const TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppColors.textOnPink,
+                                            ),
+                                          ),
+                                        ),
+                                        if (goal['isCompleted'] == true)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.accentCoral.withOpacity(0.2),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: AppColors.accentCoral,
+                                                width: 1.5,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons.check_circle,
+                                                  size: 16,
+                                                  color: AppColors.accentCoral,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                const Text(
+                                                  'Completed',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: AppColors.accentCoral,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                     if (goal['description'] != null) ...[
                                       const SizedBox(height: 8),
@@ -300,7 +393,40 @@ class _StoreGoalsScreenState extends State<StoreGoalsScreen> {
                                         ),
                                       ),
                                     ],
-                                    if (isFull) ...[
+                                    if (goal['isCompleted'] == true) ...[
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.accentCoral.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: AppColors.accentCoral.withOpacity(0.5),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.emoji_events,
+                                              size: 20,
+                                              color: AppColors.accentCoral,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'You completed this challenge! 🎉',
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: AppColors.accentCoral,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                    if (isFull && goal['isCompleted'] != true) ...[
                                       const SizedBox(height: 8),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

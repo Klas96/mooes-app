@@ -7,17 +7,12 @@ import '../constants/api_config.dart';
 class StoreGoalService {
   static String get baseUrl => ApiConfig.apiBaseUrl;
 
-  /// Get all active store goals
+  /// Get all active store goals (with optional auth to show completion status)
   static Future<List<Map<String, dynamic>>> getActiveGoals() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/store-goals/active'),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          throw Exception('Request timeout');
-        },
+      final response = await AuthService.authenticatedRequest(
+        'GET',
+        '/store-goals/active',
       );
 
       if (response.statusCode == 200) {

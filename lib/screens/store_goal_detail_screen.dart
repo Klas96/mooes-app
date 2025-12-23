@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mooves/constants/colors.dart';
+import 'package:mooves/constants/api_config.dart';
 import 'package:mooves/services/store_goal_service.dart';
 import 'package:mooves/services/user_goal_progress_service.dart';
 import 'package:mooves/screens/coupons_screen.dart';
+import 'package:mooves/screens/store_profile_screen.dart';
 import 'package:intl/intl.dart';
 
 class StoreGoalDetailScreen extends StatefulWidget {
@@ -54,6 +57,24 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
       // User might not have joined yet, which is OK
       debugPrint('No progress found: $e');
     }
+  }
+
+  String _getStoreImageUrl(Map<String, dynamic>? store) {
+    if (store == null) return '';
+    final imagePath = store['profilePicture'] ?? store['logo'];
+    if (imagePath == null || imagePath.isEmpty) return '';
+    
+    // If it's already a full URL, return as is
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    
+    // If it's a relative path, construct full URL
+    if (imagePath.startsWith('/uploads/')) {
+      return '${ApiConfig.baseUrl}$imagePath';
+    }
+    
+    return imagePath;
   }
 
   Future<void> _joinGoal() async {
@@ -236,49 +257,84 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
                       if (_goal!['store'] != null) ...[
                         Card(
                           color: AppColors.pinkCard,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                if (_goal!['store']['logo'] != null)
-                                  Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      image: DecorationImage(
-                                        image: NetworkImage(_goal!['store']['logo']),
-                                        fit: BoxFit.cover,
+                          child: InkWell(
+                            onTap: () {
+                              final store = _goal!['store'];
+                              if (store != null) {
+                                debugPrint('Full store object: $store');
+                                debugPrint('Store keys: ${store.keys.toList()}');
+                                final storeId = store['id'] ?? store['Id'] ?? store['ID'];
+                                debugPrint('Store ID value: $storeId (type: ${storeId.runtimeType})');
+                                final storeIdString = storeId?.toString();
+                                if (storeIdString != null && storeIdString.isNotEmpty) {
+                                  debugPrint('Navigating to store profile with ID: $storeIdString');
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => StoreProfileScreen(storeId: storeIdString),
+                                    ),
+                                  );
+                                } else {
+                                  debugPrint('Store ID is null or empty. Available keys: ${store.keys}');
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Unable to load store profile: missing store ID'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              } else {
+                                debugPrint('Store object is null');
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  if (_getStoreImageUrl(_goal!['store']).isNotEmpty)
+                                    Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        image: DecorationImage(
+                                          image: NetworkImage(_getStoreImageUrl(_goal!['store'])),
+                                          fit: BoxFit.cover,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                if (_goal!['store']['logo'] != null) const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _goal!['store']['storeName'] ?? 'Store',
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.textOnPink,
-                                        ),
-                                      ),
-                                      if (_goal!['store']['location'] != null) ...[
-                                        const SizedBox(height: 4),
+                                  if (_getStoreImageUrl(_goal!['store']).isNotEmpty) const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
                                         Text(
-                                          _goal!['store']['location'],
+                                          _goal!['store']['storeName'] ?? 'Store',
                                           style: const TextStyle(
-                                            fontSize: 14,
-                                            color: AppColors.textSecondary,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.textOnPink,
                                           ),
                                         ),
+                                        if (_goal!['store']['location'] != null) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            _goal!['store']['location'],
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
                                       ],
-                                    ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  const Icon(
+                                    Icons.chevron_right,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

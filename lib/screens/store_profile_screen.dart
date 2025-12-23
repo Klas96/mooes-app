@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mooves/constants/colors.dart';
 import 'package:mooves/constants/api_config.dart';
 import 'package:mooves/services/store_service.dart';
@@ -31,6 +32,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     });
 
     try {
+      debugPrint('Loading store with ID: ${widget.storeId}');
       final store = await StoreService.getStoreById(widget.storeId);
       if (!mounted) return;
 
@@ -38,10 +40,13 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
         _store = store;
         _isLoading = false;
         if (store == null) {
-          _error = 'Store not found';
+          _error = 'Store not found. The store may not exist or may have been removed.';
+        } else {
+          debugPrint('Store loaded successfully: ${store['storeName']}');
         }
       });
     } catch (e) {
+      debugPrint('Error loading store: $e');
       if (!mounted) return;
       setState(() {
         _error = 'Failed to load store: $e';
