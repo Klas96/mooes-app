@@ -1,13 +1,12 @@
 class ApiConfig {
-  // Backend URL - Bahnhof VPS (nginx proxies port 443 to backend on 8080)
-  // For web, we use the IP address directly. For native apps, same IP.
-  static const String baseUrl = 'https://backend.klasholmgren.se';
+  // Backend URL - Vercel deployment
+  static const String baseUrl = 'https://mooves-backend.vercel.app';
   
   // API endpoints - Include /api prefix for backend routes
   static const String apiBaseUrl = '$baseUrl/api';
   
-  // WebSocket URL for real-time features
-  static const String webSocketUrl = 'wss://backend.klasholmgren.se';
+  // WebSocket URL for real-time features (disabled on Vercel - use polling if needed)
+  static const String webSocketUrl = 'wss://mooves-backend.vercel.app';
   
   // Image uploads URL
   static const String uploadsUrl = '$baseUrl/uploads';

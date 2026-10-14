@@ -73,7 +73,6 @@ class TrainingEntry {
       'date': date.toIso8601String(),
       if (durationMinutes != null) 'durationMinutes': durationMinutes,
       if (distanceKm != null) 'distanceKm': distanceKm,
-      if (notes != null && notes!.isNotEmpty) 'notes': notes,
       'goalReached': goalReached,
       'generatedAt': DateTime.now().toIso8601String(),
     };

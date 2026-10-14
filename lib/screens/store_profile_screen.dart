@@ -3,7 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:mooves/constants/colors.dart';
 import 'package:mooves/constants/api_config.dart';
 import 'package:mooves/services/store_service.dart';
+import 'package:mooves/services/coupon_service.dart';
 import 'package:mooves/widgets/app_bar_logo.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 
 class StoreProfileScreen extends StatefulWidget {
   final String storeId;
@@ -16,7 +19,9 @@ class StoreProfileScreen extends StatefulWidget {
 
 class _StoreProfileScreenState extends State<StoreProfileScreen> {
   Map<String, dynamic>? _store;
+  List<Map<String, dynamic>> _coupons = [];
   bool _isLoading = true;
+  bool _couponsLoading = false;
   String? _error;
 
   @override
@@ -45,12 +50,39 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
           debugPrint('Store loaded successfully: ${store['storeName']}');
         }
       });
+
+      // Load coupons after store is loaded
+      if (store != null) {
+        _loadCoupons();
+      }
     } catch (e) {
       debugPrint('Error loading store: $e');
       if (!mounted) return;
       setState(() {
         _error = 'Failed to load store: $e';
         _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadCoupons() async {
+    setState(() {
+      _couponsLoading = true;
+    });
+
+    try {
+      final coupons = await CouponService.getStoreCoupons(widget.storeId);
+      if (!mounted) return;
+
+      setState(() {
+        _coupons = coupons;
+        _couponsLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading coupons: $e');
+      if (!mounted) return;
+      setState(() {
+        _couponsLoading = false;
       });
     }
   }
@@ -243,6 +275,53 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                                   ),
                                   const SizedBox(height: 16),
                                 ],
+                                // Website
+                                if (_store!['website'] != null &&
+                                    (_store!['website'] as String).isNotEmpty) ...[
+                                  InkWell(
+                                    onTap: () async {
+                                      final website = _store!['website'] as String;
+                                      final url = Uri.parse(
+                                        website.startsWith('http://') || website.startsWith('https://')
+                                            ? website
+                                            : 'https://$website'
+                                      );
+                                      try {
+                                        if (await canLaunchUrl(url)) {
+                                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                                        }
+                                      } catch (e) {
+                                        debugPrint('Error launching website: $e');
+                                      }
+                                    },
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.language,
+                                          color: AppColors.primaryPurple,
+                                          size: 24,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            _store!['website'],
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              color: AppColors.primaryPurple,
+                                              decoration: TextDecoration.underline,
+                                            ),
+                                          ),
+                                        ),
+                                        const Icon(
+                                          Icons.open_in_new,
+                                          size: 16,
+                                          color: AppColors.primaryPurple,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                ],
                                 // Status
                                 Row(
                                   children: [
@@ -271,10 +350,143 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
+                        // Coupons Section
+                        if (!_couponsLoading && _coupons.isNotEmpty) ...[
+                          const Text(
+                            'Available Coupons',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textOnPink,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          ..._coupons.map((coupon) => _buildCouponCard(coupon)),
+                          const SizedBox(height: 24),
+                        ] else if (_couponsLoading) ...[
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(24.0),
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryPurple),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 ),
+    );
+  }
+
+  Widget _buildCouponCard(Map<String, dynamic> coupon) {
+    final isExpired = coupon['expiresAt'] != null &&
+        DateTime.parse(coupon['expiresAt']).isBefore(DateTime.now());
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      color: AppColors.pinkCard,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Goal info if available
+            if (coupon['goal'] != null) ...[
+              Text(
+                coupon['goal']['title'] ?? 'Challenge Reward',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            // Coupon description
+            Text(
+              coupon['description'] ?? 'Reward coupon',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textOnPink,
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Discount info
+            Row(
+              children: [
+                const Icon(
+                  Icons.local_offer,
+                  size: 20,
+                  color: AppColors.primaryPurple,
+                ),
+                const SizedBox(width: 8),
+                if (coupon['discount'] != null)
+                  Text(
+                    '${coupon['discount']}% off',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryPurple,
+                    ),
+                  ),
+                if (coupon['discountAmount'] != null)
+                  Text(
+                    '${coupon['discountAmount']} kr off',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryPurple,
+                    ),
+                  ),
+              ],
+            ),
+            if (coupon['expiresAt'] != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.calendar_today,
+                    size: 16,
+                    color: isExpired ? Colors.red : AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Expires: ${DateFormat('MMM d, y').format(DateTime.parse(coupon['expiresAt']))}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isExpired ? Colors.red : AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (isExpired) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Expired',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

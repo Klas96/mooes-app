@@ -22,15 +22,33 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
   Map<String, dynamic>? _progress;
   bool _isLoading = true;
   bool _isJoining = false;
-  bool _isMarkingComplete = false;
   String? _error;
+
+  bool _hasLoadedOnce = false;
 
   @override
   void initState() {
     super.initState();
     _loadGoal();
-    _loadProgress();
+    _loadProgress().then((_) {
+      _hasLoadedOnce = true;
+    });
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload progress when screen becomes visible again (after initial load)
+    // This ensures progress updates when user navigates back after logging a session
+    if (_hasLoadedOnce) {
+      // Use Future.microtask to avoid calling setState during build
+      Future.microtask(() async {
+        await Future.delayed(const Duration(milliseconds: 300)); // Small delay for backend
+        await _loadProgress();
+      });
+    }
+  }
+
 
   Future<void> _loadGoal() async {
     try {
@@ -50,6 +68,11 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
   Future<void> _loadProgress() async {
     try {
       final progress = await UserGoalProgressService.getGoalProgress(widget.goalId);
+      debugPrint('📈 Loaded progress: $progress');
+      if (progress != null) {
+        debugPrint('  - currentDistanceMeters: ${progress['currentDistanceMeters']}');
+        debugPrint('  - currentDurationMinutes: ${progress['currentDurationMinutes']}');
+      }
       setState(() {
         _progress = progress;
       });
@@ -115,66 +138,6 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
     }
   }
 
-  Future<void> _markGoalComplete() async {
-    setState(() {
-      _isMarkingComplete = true;
-      _error = null;
-    });
-
-    try {
-      final result = await UserGoalProgressService.markGoalComplete(widget.goalId);
-      if (result['success'] == true) {
-        await _loadProgress();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                result['message'] ?? 'Challenge marked as complete!',
-                style: const TextStyle(color: AppColors.textOnPink),
-              ),
-              backgroundColor: AppColors.pinkCard,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-      } else {
-        setState(() {
-          _error = result['message'] ?? 'Failed to mark challenge as complete';
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                result['message'] ?? 'Failed to mark challenge as complete',
-                style: const TextStyle(color: Colors.white),
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      setState(() {
-        _error = 'Error marking challenge as complete: $e';
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Error: $e',
-              style: const TextStyle(color: Colors.white),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      setState(() {
-        _isMarkingComplete = false;
-      });
-    }
-  }
-
   String _formatDistance(int? meters) {
     if (meters == null) return '0 m';
     if (meters >= 1000) {
@@ -211,6 +174,14 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
           ),
         ),
         iconTheme: const IconThemeData(color: AppColors.textOnPink),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () async {
+              await _loadProgress();
+            },
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(
@@ -248,11 +219,16 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
                     ],
                   ),
                 )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              : RefreshIndicator(
+                  onRefresh: () async {
+                    await _loadProgress();
+                  },
+                  color: AppColors.primaryPurple,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                       // Store info
                       if (_goal!['store'] != null) ...[
                         Card(
@@ -400,12 +376,24 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 8),
-                                  LinearProgressIndicator(
-                                    value: (_progress!['currentDistanceMeters'] as int? ?? 0) /
-                                        (_goal!['targetDistanceMeters'] as int),
-                                    backgroundColor: AppColors.pinkMedium,
-                                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryPurple),
-                                    minHeight: 8,
+                                  Builder(
+                                    builder: (context) {
+                                      final currentMeters = (_progress!['currentDistanceMeters'] as num?)?.toDouble() ?? 0.0;
+                                      final targetMeters = (_goal!['targetDistanceMeters'] as num?)?.toDouble() ?? 1.0;
+                                      final progressValue = targetMeters > 0 
+                                          ? (currentMeters / targetMeters).clamp(0.0, 1.0) 
+                                          : 0.0;
+                                      
+                                      // Debug logging
+                                      debugPrint('📊 Distance Progress: $currentMeters / $targetMeters = $progressValue');
+                                      
+                                      return LinearProgressIndicator(
+                                        value: progressValue,
+                                        backgroundColor: AppColors.pinkMedium,
+                                        valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryPurple),
+                                        minHeight: 8,
+                                      );
+                                    },
                                   ),
                                   const SizedBox(height: 16),
                                 ],
@@ -431,12 +419,24 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 8),
-                                  LinearProgressIndicator(
-                                    value: (_progress!['currentDurationMinutes'] as int? ?? 0) /
-                                        (_goal!['targetDurationMinutes'] as int),
-                                    backgroundColor: AppColors.pinkMedium,
-                                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryPurple),
-                                    minHeight: 8,
+                                  Builder(
+                                    builder: (context) {
+                                      final currentMinutes = (_progress!['currentDurationMinutes'] as num?)?.toDouble() ?? 0.0;
+                                      final targetMinutes = (_goal!['targetDurationMinutes'] as num?)?.toDouble() ?? 1.0;
+                                      final progressValue = targetMinutes > 0 
+                                          ? (currentMinutes / targetMinutes).clamp(0.0, 1.0) 
+                                          : 0.0;
+                                      
+                                      // Debug logging
+                                      debugPrint('⏱️ Duration Progress: $currentMinutes / $targetMinutes = $progressValue');
+                                      
+                                      return LinearProgressIndicator(
+                                        value: progressValue,
+                                        backgroundColor: AppColors.pinkMedium,
+                                        valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryPurple),
+                                        minHeight: 8,
+                                      );
+                                    },
                                   ),
                                   const SizedBox(height: 16),
                                 ],
@@ -488,41 +488,6 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
                                         padding: const EdgeInsets.symmetric(vertical: 16),
                                       ),
                                     ),
-                                  ),
-                                ] else ...[
-                                  // Manual completion button
-                                  const SizedBox(height: 12),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: ElevatedButton.icon(
-                                      onPressed: _isMarkingComplete ? null : _markGoalComplete,
-                                      icon: _isMarkingComplete
-                                          ? const SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white,
-                                              ),
-                                            )
-                                          : const Icon(Icons.check_circle_outline),
-                                      label: Text(_isMarkingComplete ? 'Marking Complete...' : 'Mark Challenge as Complete'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.accentCoral,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(vertical: 16),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Tap this button when you have completed the challenge',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                    textAlign: TextAlign.center,
                                   ),
                                 ],
                               ],
@@ -697,6 +662,7 @@ class _StoreGoalDetailScreenState extends State<StoreGoalDetailScreen> {
                     ],
                   ),
                 ),
+              ),
     );
   }
 

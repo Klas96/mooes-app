@@ -6,8 +6,8 @@ import 'package:mooves/screens/auth/forgot_password_screen.dart';
 import 'package:mooves/screens/auth/reset_password_screen.dart';
 import 'package:mooves/screens/tabs/home_tab.dart';
 import 'package:mooves/screens/tabs/profile_tab.dart';
+import 'package:mooves/screens/tabs/companies_tab.dart';
 import 'package:mooves/screens/coupons_screen.dart';
-import 'package:mooves/screens/store_goals_screen.dart';
 import 'package:mooves/screens/profile_setup_screen.dart';
 import 'package:mooves/screens/debug_screen.dart';
 import 'package:mooves/constants/colors.dart';
@@ -463,8 +463,8 @@ class _MainTabScreenState extends State<MainTabScreen> {
       // Initialize _tabs here where _navigateToTab is available
       _tabs = [
         HomeTab(navigateToTab: _navigateToTab),
-        const StoreGoalsScreen(),
-        const CouponsScreen(),
+        const CouponsScreen(), // Combined challenges & coupons
+        const CompaniesTab(),
         ProfileTab(navigateToTab: _navigateToTab),
       ];
       print('=== DEBUG: MainTabScreen tabs initialized successfully ===');
@@ -525,12 +525,12 @@ class _MainTabScreenState extends State<MainTabScreen> {
             label: 'Log',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.emoji_events),
-            label: 'Challenges',
+            icon: Icon(Icons.local_offer),
+            label: 'Rewards',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.local_offer),
-            label: 'Coupons',
+            icon: Icon(Icons.store),
+            label: 'Companies',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person),

@@ -186,6 +186,8 @@ class _StoreGoalsScreenState extends State<StoreGoalsScreen> {
                                 if (result == true) {
                                   _loadGoals(); // Refresh if user joined
                                 }
+                                // Always refresh goals list when returning (progress may have updated)
+                                _loadGoals();
                               },
                               borderRadius: BorderRadius.circular(16),
                               child: Padding(

@@ -50,6 +50,30 @@ class CouponService {
     }
   }
 
+  /// Get public coupons for a store (unassigned/unused coupons)
+  static Future<List<Map<String, dynamic>>> getStoreCoupons(String storeId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/coupons/store/$storeId'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['coupons'] != null) {
+          return List<Map<String, dynamic>>.from(data['coupons']);
+        }
+        return [];
+      }
+      return [];
+    } catch (e) {
+      debugPrint('Error fetching store coupons: $e');
+      return [];
+    }
+  }
+
   /// Mark a coupon as used
   static Future<Map<String, dynamic>> useCoupon(String couponId) async {
     try {

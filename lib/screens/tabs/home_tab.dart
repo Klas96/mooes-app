@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:mooves/constants/colors.dart';
 import 'package:mooves/models/training_entry.dart';
 import 'package:mooves/screens/reward_qr_screen.dart';
-import 'package:mooves/screens/store_goals_screen.dart';
 import 'package:mooves/screens/store_goal_detail_screen.dart';
 import 'package:mooves/screens/coupons_screen.dart';
 import 'package:mooves/services/health_connect_service.dart';
 import 'package:mooves/services/google_fit_service.dart';
 import 'package:mooves/services/profile_service.dart';
 import 'package:mooves/services/user_goal_progress_service.dart';
+import 'package:mooves/services/training_session_service.dart';
 import 'package:mooves/widgets/app_bar_logo.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -23,20 +23,28 @@ class HomeTab extends StatefulWidget {
   State<HomeTab> createState() => _HomeTabState();
 }
 
-class _HomeTabState extends State<HomeTab> {
+class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   static const _storageKey = 'training_entries';
 
   List<TrainingEntry> _entries = [];
   List<Map<String, dynamic>> _activeGoals = [];
   bool _isLoading = true;
   String? _error;
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadEntries();
     _syncGoogleFit();
     _loadActiveGoals();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadActiveGoals() async {
@@ -168,7 +176,11 @@ class _HomeTabState extends State<HomeTab> {
           ? existing!.durationMinutes.toString()
           : '',
     );
-    final notesController = TextEditingController(text: existing?.notes ?? '');
+    final distanceController = TextEditingController(
+      text: existing?.distanceKm != null
+          ? existing!.distanceKm.toString()
+          : '',
+    );
     DateTime selectedDate = existing?.date ?? DateTime.now();
 
     final result = await showModalBottomSheet<TrainingEntry>(
@@ -226,11 +238,11 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                     const SizedBox(height: 16),
                     TextField(
-                      controller: notesController,
-                      maxLines: 4,
+                      controller: distanceController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
-                        labelText: 'Notes',
-                        hintText: 'How did it feel? Any personal records?',
+                        labelText: 'Distance (km)',
+                        hintText: 'Optional',
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -267,6 +279,11 @@ class _HomeTabState extends State<HomeTab> {
                               final duration = durationRaw.isEmpty
                                   ? null
                                   : int.tryParse(durationRaw);
+                              final distanceRaw =
+                                  distanceController.text.trim();
+                              final distance = distanceRaw.isEmpty
+                                  ? null
+                                  : double.tryParse(distanceRaw);
 
                               if (title.isEmpty) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -293,9 +310,7 @@ class _HomeTabState extends State<HomeTab> {
                                 title: title,
                                 date: selectedDate,
                                 durationMinutes: duration,
-                                notes: notesController.text.trim().isEmpty
-                                    ? null
-                                    : notesController.text.trim(),
+                                distanceKm: distance,
                               );
 
                               Navigator.of(context).pop(entry);
@@ -321,17 +336,65 @@ class _HomeTabState extends State<HomeTab> {
 
     if (!mounted) return;
     if (result != null) {
+      // Save to backend first
+      final entryToSave = result; // Non-nullable since result is checked
+      try {
+        final dateStr = result.date.toIso8601String().split('T')[0]; // YYYY-MM-DD
+        
+        if (existing == null) {
+          // Create new session
+          debugPrint('📝 Creating session on backend:');
+          debugPrint('  - Title: ${result.title}');
+          debugPrint('  - Date: $dateStr');
+          debugPrint('  - Distance: ${result.distanceKm} km');
+          debugPrint('  - Duration: ${result.durationMinutes} minutes');
+          
+          final response = await TrainingSessionService.createSession(
+            title: result.title,
+            date: dateStr,
+            durationMinutes: result.durationMinutes,
+            distanceKm: result.distanceKm,
+            goalReached: result.goalReached,
+          );
+          
+          if (response['success'] == true && response['session'] != null) {
+            // Session created successfully on backend
+            debugPrint('✅ Session created successfully on backend');
+            debugPrint('  - Response: ${response['session']}');
+          } else {
+            debugPrint('❌ Failed to create session: ${response['message']}');
+          }
+        } else {
+          // Update existing session - need to check if it has a backend ID
+          // For now, we'll try to update using the local ID
+          // In a production app, you'd want to store backend IDs separately
+          await TrainingSessionService.updateSession(
+            id: result.id,
+            title: result.title,
+            date: dateStr,
+            durationMinutes: result.durationMinutes,
+            distanceKm: result.distanceKm,
+            goalReached: result.goalReached,
+          );
+        }
+      } catch (e) {
+        debugPrint('Error syncing session to backend: $e');
+        // Continue with local save even if backend sync fails
+      }
+      
       setState(() {
         if (existing == null) {
-          _entries = [result, ..._entries];
+          _entries = [entryToSave, ..._entries];
         } else {
           _entries = _entries
-              .map((entry) => entry.id == result.id ? result : entry)
+              .map((entry) => entry.id == entryToSave.id ? entryToSave : entry)
               .toList();
         }
       });
       await _saveEntries();
       // Update store goal progress after creating/updating entry
+      // Add a small delay to allow backend to process the update
+      await Future.delayed(const Duration(milliseconds: 500));
       await _loadActiveGoals();
     }
   }
@@ -355,6 +418,14 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Future<void> _deleteEntry(TrainingEntry entry) async {
+    // Delete from backend first
+    try {
+      await TrainingSessionService.deleteSession(entry.id);
+    } catch (e) {
+      debugPrint('Error deleting session from backend: $e');
+      // Continue with local delete even if backend delete fails
+    }
+    
     setState(() {
       _entries = _entries.where((e) => e.id != entry.id).toList();
     });
@@ -461,6 +532,277 @@ class _HomeTabState extends State<HomeTab> {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
+  Map<String, dynamic> _calculateStatistics() {
+    if (_entries.isEmpty) {
+      return {
+        'totalSessions': 0,
+        'totalDistanceKm': 0.0,
+        'totalDurationMinutes': 0,
+        'avgDistanceKm': 0.0,
+        'avgDurationMinutes': 0.0,
+        'sessionsThisWeek': 0,
+        'distanceThisWeek': 0.0,
+        'sessionsThisMonth': 0,
+        'distanceThisMonth': 0.0,
+      };
+    }
+
+    final now = DateTime.now();
+    final weekStart = now.subtract(Duration(days: now.weekday - 1));
+    final monthStart = DateTime(now.year, now.month, 1);
+
+    int totalSessions = _entries.length;
+    double totalDistanceKm = 0.0;
+    int totalDurationMinutes = 0;
+    int sessionsThisWeek = 0;
+    double distanceThisWeek = 0.0;
+    int sessionsThisMonth = 0;
+    double distanceThisMonth = 0.0;
+
+    for (final entry in _entries) {
+      if (entry.distanceKm != null) {
+        totalDistanceKm += entry.distanceKm!;
+        if (entry.date.isAfter(weekStart.subtract(const Duration(days: 1)))) {
+          distanceThisWeek += entry.distanceKm!;
+        }
+        if (entry.date.isAfter(monthStart.subtract(const Duration(days: 1)))) {
+          distanceThisMonth += entry.distanceKm!;
+        }
+      }
+      if (entry.durationMinutes != null) {
+        totalDurationMinutes += entry.durationMinutes!;
+      }
+      if (entry.date.isAfter(weekStart.subtract(const Duration(days: 1)))) {
+        sessionsThisWeek++;
+      }
+      if (entry.date.isAfter(monthStart.subtract(const Duration(days: 1)))) {
+        sessionsThisMonth++;
+      }
+    }
+
+    final avgDistanceKm = totalSessions > 0 ? totalDistanceKm / totalSessions : 0.0;
+    final avgDurationMinutes = totalSessions > 0 ? totalDurationMinutes / totalSessions : 0.0;
+
+    return {
+      'totalSessions': totalSessions,
+      'totalDistanceKm': totalDistanceKm,
+      'totalDurationMinutes': totalDurationMinutes,
+      'avgDistanceKm': avgDistanceKm,
+      'avgDurationMinutes': avgDurationMinutes,
+      'sessionsThisWeek': sessionsThisWeek,
+      'distanceThisWeek': distanceThisWeek,
+      'sessionsThisMonth': sessionsThisMonth,
+      'distanceThisMonth': distanceThisMonth,
+    };
+  }
+
+  Widget _buildStatisticsCard() {
+    final stats = _calculateStatistics();
+
+    String _formatDistance(double km) {
+      if (km == 0) return '0 km';
+      if (km < 1) return '${(km * 1000).toStringAsFixed(0)} m';
+      return '${km.toStringAsFixed(1)} km';
+    }
+
+    String _formatDuration(int minutes) {
+      if (minutes == 0) return '0 min';
+      if (minutes < 60) return '$minutes min';
+      final hours = minutes ~/ 60;
+      final mins = minutes % 60;
+      if (mins == 0) return '$hours h';
+      return '$hours h $mins min';
+    }
+
+    String _formatDurationDouble(double minutes) {
+      if (minutes == 0) return '0 min';
+      if (minutes < 60) return '${minutes.toStringAsFixed(0)} min';
+      final hours = (minutes / 60).floor();
+      final mins = (minutes % 60).round();
+      if (mins == 0) return '$hours h';
+      return '$hours h $mins min';
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      color: AppColors.pinkCard,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.analytics_outlined,
+                  color: AppColors.primaryPurple,
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Statistics',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textOnPink,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Total stats
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatItem(
+                    'Total Sessions',
+                    '${stats['totalSessions']}',
+                    Icons.fitness_center,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatItem(
+                    'Total Distance',
+                    _formatDistance(stats['totalDistanceKm'] as double),
+                    Icons.straighten,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatItem(
+                    'Total Duration',
+                    _formatDuration(stats['totalDurationMinutes'] as int),
+                    Icons.timer_outlined,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatItem(
+                    'Avg Distance',
+                    _formatDistance(stats['avgDistanceKm'] as double),
+                    Icons.trending_up,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(color: AppColors.pinkMedium),
+            const SizedBox(height: 12),
+            // This week
+            const Text(
+              'This Week',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textOnPink,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatItem(
+                    'Sessions',
+                    '${stats['sessionsThisWeek']}',
+                    Icons.calendar_today,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatItem(
+                    'Distance',
+                    _formatDistance(stats['distanceThisWeek'] as double),
+                    Icons.straighten,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // This month
+            const Text(
+              'This Month',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textOnPink,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatItem(
+                    'Sessions',
+                    '${stats['sessionsThisMonth']}',
+                    Icons.calendar_month,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatItem(
+                    'Distance',
+                    _formatDistance(stats['distanceThisMonth'] as double),
+                    Icons.straighten,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundPink,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textOnPink,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _buildGoalProgressCard(Map<String, dynamic> progress) {
     final goal = progress['goal'] as Map<String, dynamic>?;
@@ -563,8 +905,13 @@ class _HomeTabState extends State<HomeTab> {
                 ),
                 const SizedBox(height: 8),
                 LinearProgressIndicator(
-                  value: (progress['currentDistanceMeters'] as int? ?? 0) /
-                      (goal['targetDistanceMeters'] as int),
+                  value: () {
+                    final current = ((progress['currentDistanceMeters'] as num?)?.toDouble() ?? 0.0);
+                    final target = ((goal['targetDistanceMeters'] as num?)?.toDouble() ?? 1.0);
+                    if (target <= 0) return 0.0;
+                    final progressValue = (current / target).clamp(0.0, 1.0);
+                    return progressValue;
+                  }(),
                   backgroundColor: AppColors.pinkMedium,
                   valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryPurple),
                   minHeight: 8,
@@ -594,8 +941,13 @@ class _HomeTabState extends State<HomeTab> {
                 ),
                 const SizedBox(height: 8),
                 LinearProgressIndicator(
-                  value: (progress['currentDurationMinutes'] as int? ?? 0) /
-                      (goal['targetDurationMinutes'] as int),
+                  value: () {
+                    final current = ((progress['currentDurationMinutes'] as num?)?.toDouble() ?? 0.0);
+                    final target = ((goal['targetDurationMinutes'] as num?)?.toDouble() ?? 1.0);
+                    if (target <= 0) return 0.0;
+                    final progressValue = (current / target).clamp(0.0, 1.0);
+                    return progressValue;
+                  }(),
                   backgroundColor: AppColors.pinkMedium,
                   valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryPurple),
                   minHeight: 8,
@@ -770,137 +1122,185 @@ class _HomeTabState extends State<HomeTab> {
         elevation: 0,
         title: const AppBarLogo(title: 'Training log'),
         iconTheme: const IconThemeData(color: AppColors.textOnPink),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: AppColors.primaryPurple,
+          labelColor: AppColors.textOnPink,
+          unselectedLabelColor: AppColors.textSecondary,
+          tabs: const [
+            Tab(text: 'Sessions'),
+            Tab(text: 'Statistics'),
+          ],
+        ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddEntrySheet(),
-        icon: const Icon(Icons.add),
-        label: const Text('Log session'),
-      ),
+      floatingActionButton: _tabController.index == 0
+          ? FloatingActionButton.extended(
+              onPressed: () => _showAddEntrySheet(),
+              icon: const Icon(Icons.add),
+              label: const Text('Log session'),
+            )
+          : null,
       body: RefreshIndicator(
         onRefresh: () async {
           await _loadEntries();
           await _syncGoogleFit();
           await _loadActiveGoals();
         },
-        child: _entries.isEmpty && _activeGoals.isEmpty
-            ? ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(32),
-                children: [
-                  const SizedBox(height: 80),
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: AppColors.pinkCard,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.fitness_center,
-                      size: 64,
-                      color: AppColors.accentCoral,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    "Let's move!",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textOnPink,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Log your training sessions and mark the workouts where you reached a goal. We will generate a reward QR code once goals are completed.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddEntrySheet(),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Log first session'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryPurple,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  // Store challenges and coupons buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            // Sessions tab
+            _entries.isEmpty && _activeGoals.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(32),
                     children: [
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          widget.navigateToTab(1); // Navigate to Challenges tab
-                        },
-                        icon: const Icon(Icons.emoji_events),
-                        label: const Text('Challenges'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primaryPurple,
-                          side: const BorderSide(color: AppColors.primaryPurple),
+                      const SizedBox(height: 80),
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: AppColors.pinkCard,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.fitness_center,
+                          size: 64,
+                          color: AppColors.accentCoral,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          widget.navigateToTab(2); // Navigate to Coupons tab
-                        },
-                        icon: const Icon(Icons.local_offer),
-                        label: const Text('Coupons'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primaryPurple,
-                          side: const BorderSide(color: AppColors.primaryPurple),
+                      const SizedBox(height: 24),
+                      const Text(
+                        "Let's move!",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textOnPink,
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Log your training sessions and mark the workouts where you reached a goal. We will generate a reward QR code once goals are completed.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      ElevatedButton.icon(
+                        onPressed: () => _showAddEntrySheet(),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Log first session'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryPurple,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Store challenges and coupons buttons
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              widget.navigateToTab(1); // Navigate to Rewards tab (challenges & coupons)
+                            },
+                            icon: const Icon(Icons.local_offer),
+                            label: const Text('Rewards'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primaryPurple,
+                              side: const BorderSide(color: AppColors.primaryPurple),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ],
+                    ],
+                  )
+                : ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      // Active store goals progress section
+                      if (_activeGoals.isNotEmpty) ...[
+                        const Text(
+                          'Active Challenges',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textOnPink,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        ..._activeGoals.map((progress) => _buildGoalProgressCard(progress)),
+                        const SizedBox(height: 24),
+                        const Divider(),
+                        const SizedBox(height: 16),
+                      ],
+                      // Training entries
+                      const Text(
+                        'Training Sessions',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textOnPink,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ..._entries.asMap().entries.map((entry) => _buildTrainingEntryCard(entry.value)),
                     ],
                   ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ],
-                ],
-              )
-            : ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  // Active store goals progress section
-                  if (_activeGoals.isNotEmpty) ...[
-                    const Text(
-                      'Active Challenges',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textOnPink,
+            // Statistics tab
+            ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (_entries.isEmpty)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.analytics_outlined,
+                            size: 64,
+                            color: AppColors.textSecondary,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'No statistics available',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textOnPink,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Log some training sessions to see your statistics',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    ..._activeGoals.map((progress) => _buildGoalProgressCard(progress)),
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    const SizedBox(height: 16),
-                  ],
-                  // Training entries
-                  const Text(
-                    'Training Sessions',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textOnPink,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ..._entries.asMap().entries.map((entry) => _buildTrainingEntryCard(entry.value)),
-                ],
-              ),
+                  )
+                else
+                  _buildStatisticsCard(),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

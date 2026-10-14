@@ -39,6 +39,42 @@ class StoreService {
     }
   }
 
+  /// Get all active stores
+  static Future<List<Map<String, dynamic>>> getAllStores({int? limit, int? offset}) async {
+    try {
+      final queryParams = <String, String>{};
+      if (limit != null) queryParams['limit'] = limit.toString();
+      if (offset != null) queryParams['offset'] = offset.toString();
+
+      final uri = Uri.parse('$baseUrl/stores').replace(queryParameters: queryParams);
+      debugPrint('Fetching all stores from: $uri');
+
+      final response = await http.get(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
+      debugPrint('Stores API response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['stores'] != null) {
+          final stores = data['stores'] as List;
+          return stores.map((store) => store as Map<String, dynamic>).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      debugPrint('Error fetching all stores: $e');
+      return [];
+    }
+  }
+
   /// Get store image URL
   static String getStoreImageUrl(Map<String, dynamic>? store) {
     if (store == null) return '';
