@@ -118,10 +118,9 @@
             android:resource="@color/notification_color" />
         
         <!-- Play Billing Library version declaration (required by Google Play) -->
-        <!-- This tells Google Play that we're using Play Billing Library 6.1.0, not AIDL -->
         <meta-data
             android:name="com.google.android.play.billingclient.version"
-            android:value="6.1.0" />
+            android:value="8.0.0" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
