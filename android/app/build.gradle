@@ -26,20 +26,18 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     
-    // Force resolution strategy to use Play Billing Library 6.0.1+
-    // This ensures we use version 6.1.0 and reject any older AIDL-based versions
+    // Force Play Billing Library ≥8.0.0 (Play Console requirement).
     configurations.all {
         resolutionStrategy {
-            force 'com.android.billingclient:billing:6.1.0'
-            force 'com.android.billingclient:billing-ktx:6.1.0'
-            // Upgrade any old versions to 6.1.0
+            force 'com.android.billingclient:billing:8.0.0'
+            force 'com.android.billingclient:billing-ktx:8.0.0'
             eachDependency { DependencyResolveDetails details ->
                 if (details.requested.group == 'com.android.billingclient') {
                     if (details.requested.version != null) {
                         def version = details.requested.version
-                        if (version.startsWith('5.') || version.startsWith('4.') || version.startsWith('3.') || version.startsWith('2.') || version.startsWith('1.')) {
-                            details.useVersion '6.1.0'
-                            println "⚠️ Upgrading Play Billing Library from ${version} to 6.1.0"
+                        if (!(version ==~ /^([8-9]|[1-9][0-9]+)\./)) {
+                            details.useVersion '8.0.0'
+                            println "⚠️ Upgrading Play Billing Library from ${version} to 8.0.0"
                         }
                     }
                 }
@@ -137,8 +135,7 @@ dependencies {
     // Firebase Cloud Messaging
     implementation 'com.google.firebase:firebase-messaging:23.4.1'
     
-    // Play Billing Library 6.0.1+ (required by Google Play)
-    // This replaces the old AIDL-based billing library
-    implementation 'com.android.billingclient:billing:6.1.0'
-    implementation 'com.android.billingclient:billing-ktx:6.1.0'
+    // Play Billing Library ≥8.0.0 (required by Google Play)
+    implementation 'com.android.billingclient:billing:8.0.0'
+    implementation 'com.android.billingclient:billing-ktx:8.0.0'
 }
